@@ -44,7 +44,7 @@ class MFCCDataset(Dataset):
 
 # CNN-LSTM Hybrid Model
 class CNNLSTMEmotionModel(nn.Module):
-    def __init__(self, num_classes, hidden_size=1024, num_layers=12, dropout_rate=0.5):
+    def __init__(self, num_classes, hidden_size=512, num_layers=6, dropout_rate=0.5):
         super(CNNLSTMEmotionModel, self).__init__()
         
         # First CNN layer
