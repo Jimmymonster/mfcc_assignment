@@ -71,7 +71,7 @@ if __name__ == "__main__":
             continue
         studios = os.listdir(f"dataset/{dataset}")
         for studio in studios:
-            sub_files = ["validation"]  # Change to validation
+            sub_files = ["con"]  # Change to validation
             for sub_file in sub_files:
                 file_paths = os.listdir(f"dataset/{dataset}/{studio}/{sub_file}")
                 for file_path in file_paths:

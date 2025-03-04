@@ -8,7 +8,7 @@ from mfcc import mfcc
 
 # Define the dataset
 class MFCCDataset(Dataset):
-    def __init__(self, file_paths, labels, sample_rate=16000, max_mfcc=100, max_length=500):
+    def __init__(self, file_paths, labels, sample_rate=16000, max_mfcc=7500, max_length=12):
         self.file_paths = file_paths
         self.labels = labels
         self.sample_rate = sample_rate

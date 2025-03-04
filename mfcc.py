@@ -67,7 +67,7 @@ def mfcc(signal, sample_rate):
 
 # Example usage
 if __name__ == "__main__":
-    signal, sr = librosa.load("test.wav", sr=16000)
+    signal, sr = librosa.load("D:\KMITL\Year4 2nd\Multimedia\LastAssignment\dataset\studio1-10\studio001\clip\s001_clip_actor001_impro1_1.flac", sr=16000)
     mfcc_features = mfcc(signal, sr)
     print(mfcc_features.shape)
     
