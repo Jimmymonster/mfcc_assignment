@@ -215,10 +215,14 @@ if __name__ == "__main__":
             if m.bias is not None:
                 nn.init.zeros_(m.bias)
 
+        # Ensure requires_grad=True for all parameters
+        for param in m.parameters():
+            param.requires_grad = True
+
     model.apply(init_weights)
 
     # Train model
-    train_model(model, train_loader, val_loader, num_epochs=30, lr=lr , batch_size=batch_size, writer=writer, run_path=run_path)
+    train_model(model, train_loader, val_loader, num_epochs=50, lr=lr , batch_size=batch_size, writer=writer, run_path=run_path)
 
     # Close the writer when done
     writer.close()

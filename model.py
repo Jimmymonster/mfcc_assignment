@@ -44,23 +44,54 @@ class MFCCDataset(Dataset):
 
 # CNN-LSTM Hybrid Model
 class CNNLSTMEmotionModel(nn.Module):
-    def __init__(self, num_classes, hidden_size=128, num_layers=2):
+    def __init__(self, num_classes, hidden_size=1024, num_layers=12, dropout_rate=0.5):
         super(CNNLSTMEmotionModel, self).__init__()
+        
+        # First CNN layer
         self.conv1 = nn.Conv2d(1, 32, kernel_size=(3, 3), stride=1, padding=1)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.dropout1 = nn.Dropout2d(dropout_rate)
+
+        # Second CNN layer
         self.conv2 = nn.Conv2d(32, 64, kernel_size=(3, 3), stride=1, padding=1)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.dropout2 = nn.Dropout2d(dropout_rate)
+
+        # Third CNN layer
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=(3, 3), stride=1, padding=1)
+        self.bn3 = nn.BatchNorm2d(128)
+        self.dropout3 = nn.Dropout2d(dropout_rate)
+
+        # Pooling layer
         self.pool = nn.MaxPool2d(kernel_size=(2, 2), stride=2)
-        self.lstm = nn.LSTM(64, hidden_size, num_layers, batch_first=True, bidirectional=True)
+
+        # LSTM Layer
+        self.lstm = nn.LSTM(128, hidden_size, num_layers, batch_first=True, bidirectional=True, dropout=dropout_rate)
+
+        # Fully connected layer
         self.fc = nn.Linear(hidden_size * 2, num_classes)
 
     def forward(self, x):
-        x = self.pool(F.relu(self.conv1(x)))  # (batch, 32, mfcc, time)
-        x = self.pool(F.relu(self.conv2(x)))  # (batch, 64, reduced_mfcc, reduced_time)
+        # Apply the first CNN layer
+        x = self.pool(F.relu(self.bn1(self.conv1(x))))  # (batch, 32, mfcc, time)
+        x = self.dropout1(x)
+
+        # Apply the second CNN layer
+        x = self.pool(F.relu(self.bn2(self.conv2(x))))  # (batch, 64, reduced_mfcc, reduced_time)
+        x = self.dropout2(x)
+
+        # Apply the third CNN layer
+        x = self.pool(F.relu(self.bn3(self.conv3(x))))  # (batch, 128, more_reduced_mfcc, more_reduced_time)
+        x = self.dropout3(x)
 
         # Flatten the spatial dimensions into a sequence dimension
         batch_size, channels, height, width = x.size()
         x = x.view(batch_size, height * width, channels)  # (batch, seq_len, feature_dim)
 
+        # Apply the LSTM
         lstm_out, _ = self.lstm(x)
         x = lstm_out[:, -1, :]  # Take last hidden state
+
+        # Fully connected layer to produce final output
         x = self.fc(x)
         return x

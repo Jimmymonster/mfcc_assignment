@@ -1,10 +1,12 @@
 import torch
 import librosa
 import numpy as np
+import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, random_split
 from mfcc import mfcc
 import json
 import os
+from model import MFCCDataset, CNNLSTMEmotionModel
 
 # Define the dataset
 class MFCCDataset(Dataset):
@@ -55,6 +57,7 @@ class MFCCDataset(Dataset):
 if __name__ == "__main__":
     file_paths_input = []
     labels_input = []
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # Load emotion labels from JSON
     with open("dataset/emotion_label.json", "r", encoding="utf-8") as f:
@@ -102,3 +105,17 @@ if __name__ == "__main__":
         max_length = max(max_length, time_steps)
 
     print(f"Max MFCC: {max_mfcc}, Max Length: {max_length}")
+
+    model = CNNLSTMEmotionModel(num_classes=5).to(device)
+    def init_weights(m):
+        if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+            nn.init.xavier_uniform_(m.weight)
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
+
+    model.apply(init_weights)
+    for name, param in model.named_parameters():
+        if param.grad is not None:
+            print(f"{name} gradient: {param.grad.abs().mean()}")
+        else:
+            print(f"{name} has no gradient")
