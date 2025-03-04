@@ -2,19 +2,25 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
-from mfcc import mfcc
 import os
 import json
 from model import MFCCDataset, CNNLSTMEmotionModel
 from torch.utils.tensorboard import SummaryWriter
 
 # Training and Validation Function
-def train_model(model, train_loader, val_loader, num_epochs=10, lr=0.001, writer=None, checkpoint_dir="checkpoints", checkpoint_path=None):
+def train_model(model, train_loader, val_loader, num_epochs=10, lr=0.001, writer=None, run_path="runs"):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
-    # Load checkpoint if provided
-    if checkpoint_path and os.path.exists(checkpoint_path):
+    # Create run_path and subdirectories for checkpoints and logs if they don't exist
+    checkpoint_dir = os.path.join(run_path, "checkpoints")
+    log_dir = os.path.join(run_path, "logs")
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    os.makedirs(log_dir, exist_ok=True)
+
+    # Load checkpoint if available
+    checkpoint_path = os.path.join(checkpoint_dir, "latest_model.pth")
+    if os.path.exists(checkpoint_path):
         checkpoint = torch.load(checkpoint_path)
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -25,8 +31,8 @@ def train_model(model, train_loader, val_loader, num_epochs=10, lr=0.001, writer
         start_epoch = 0
         best_val_loss = float('inf')
 
-    # Create checkpoint directory if it doesn't exist
-    os.makedirs(checkpoint_dir, exist_ok=True)
+    # Create SummaryWriter for TensorBoard
+    writer = SummaryWriter(log_dir=log_dir)
 
     # Lists to track best and latest models
     best_models = []
@@ -57,9 +63,8 @@ def train_model(model, train_loader, val_loader, num_epochs=10, lr=0.001, writer
         print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {avg_train_loss:.4f}, Accuracy: {train_accuracy:.4f}")
 
         # Log training loss and accuracy to TensorBoard
-        if writer:
-            writer.add_scalar('Loss/train', avg_train_loss, epoch)
-            writer.add_scalar('Accuracy/train', train_accuracy, epoch)
+        writer.add_scalar('Loss/train', avg_train_loss, epoch)
+        writer.add_scalar('Accuracy/train', train_accuracy, epoch)
 
         # Validation after each epoch
         model.eval()  # Set the model to evaluation mode
@@ -81,15 +86,14 @@ def train_model(model, train_loader, val_loader, num_epochs=10, lr=0.001, writer
         print(f"Validation Loss: {avg_val_loss:.4f}, Accuracy: {val_accuracy:.4f}")
 
         # Log validation loss and accuracy to TensorBoard
-        if writer:
-            writer.add_scalar('Loss/val', avg_val_loss, epoch)
-            writer.add_scalar('Accuracy/val', val_accuracy, epoch)
+        writer.add_scalar('Loss/val', avg_val_loss, epoch)
+        writer.add_scalar('Accuracy/val', val_accuracy, epoch)
 
         # Save the best models based on validation loss
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
             # Save the best model
-            best_model_path = os.path.join(checkpoint_dir, f"best_model.pth")
+            best_model_path = os.path.join(checkpoint_dir, "best_model.pth")
             torch.save({
                 'epoch': epoch + 1,
                 'model_state_dict': model.state_dict(),
@@ -134,12 +138,22 @@ def train_model(model, train_loader, val_loader, num_epochs=10, lr=0.001, writer
             }, model_checkpoint_path)
             print(f"Best model from epoch {epoch_num} with val loss {val_loss:.4f} saved")
 
+    # Close the writer when done
+    writer.close()
+
 # Load Dataset and Train
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Create SummaryWriter instance
-    log_dir = "logs"
+    # Set run_path dynamically (e.g., current timestamp or any other identifier)
+    run_path = os.path.join("runs", "run_1")  # Modify "run_1" based on your system's timestamp or identifier
+    dataset_path = "dataset"  # Modify this path based on your dataset location
+
+    # Create the run_path directory if it doesn't exist
+    os.makedirs(run_path, exist_ok=True)
+
+    # Create SummaryWriter instance for TensorBoard
+    log_dir = os.path.join(run_path, "logs")
     writer = SummaryWriter(log_dir=log_dir)
 
     file_paths_input = []
@@ -159,7 +173,7 @@ if __name__ == "__main__":
     emo_dict = {name: emotion_mapping[details[0]["assigned_emo"]] for name, details in data.items()}
 
     # Load file paths
-    datasets = os.listdir("dataset")
+    datasets = os.listdir(dataset_path)
     for dataset in datasets:
         if os.path.isfile(f"dataset/{dataset}"):
             continue
@@ -187,11 +201,10 @@ if __name__ == "__main__":
     val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
 
     # Check for existing checkpoint to resume training
-    checkpoint_path = "checkpoints/latest_model_epoch_3.pth"  # Adjust this path based on the latest checkpoint
     model = CNNLSTMEmotionModel(num_classes=5).to(device)
 
     # Train model
-    train_model(model, train_loader, val_loader, num_epochs=10, writer=writer, checkpoint_dir="checkpoints", checkpoint_path=checkpoint_path)
+    train_model(model, train_loader, val_loader, num_epochs=10, writer=writer, run_path=run_path)
 
     # Close the writer when done
     writer.close()
