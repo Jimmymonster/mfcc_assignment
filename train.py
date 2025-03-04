@@ -8,7 +8,7 @@ from model import MFCCDataset, CNNLSTMEmotionModel
 from torch.utils.tensorboard import SummaryWriter
 
 # Training and Validation Function
-def train_model(model, train_loader, val_loader, num_epochs=10, lr=0.001, writer=None, run_path="runs"):
+def train_model(model, train_loader, val_loader, num_epochs=10, lr=0.001, batch_size=16, writer=None, run_path="runs"):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
@@ -148,6 +148,7 @@ if __name__ == "__main__":
     # Set run_path dynamically (e.g., current timestamp or any other identifier)
     run_path = os.path.join("runs", "run_1")  # Modify "run_1" based on your system's timestamp or identifier
     dataset_path = "dataset"  # Modify this path based on your dataset location
+    batch_size = 32
 
     # Create the run_path directory if it doesn't exist
     os.makedirs(run_path, exist_ok=True)
@@ -197,14 +198,15 @@ if __name__ == "__main__":
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
     # Create DataLoaders for training and validation sets
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
+      # You can modify this batch size as needed
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     # Check for existing checkpoint to resume training
     model = CNNLSTMEmotionModel(num_classes=5).to(device)
 
     # Train model
-    train_model(model, train_loader, val_loader, num_epochs=10, writer=writer, run_path=run_path)
+    train_model(model, train_loader, val_loader, num_epochs=10, batch_size=batch_size, writer=writer, run_path=run_path)
 
     # Close the writer when done
     writer.close()
