@@ -6,13 +6,33 @@ from mfcc import mfcc
 import os
 import json
 from model import MFCCDataset, CNNLSTMEmotionModel
+from torch.utils.tensorboard import SummaryWriter
 
 # Training and Validation Function
-def train_model(model, train_loader, val_loader, num_epochs=10, lr=0.001):
+def train_model(model, train_loader, val_loader, num_epochs=10, lr=0.001, writer=None, checkpoint_dir="checkpoints", checkpoint_path=None):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
-    for epoch in range(num_epochs):
+    # Load checkpoint if provided
+    if checkpoint_path and os.path.exists(checkpoint_path):
+        checkpoint = torch.load(checkpoint_path)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        start_epoch = checkpoint['epoch']
+        best_val_loss = checkpoint['best_val_loss']
+        print(f"Resuming from epoch {start_epoch} with best validation loss {best_val_loss:.4f}")
+    else:
+        start_epoch = 0
+        best_val_loss = float('inf')
+
+    # Create checkpoint directory if it doesn't exist
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+    # Lists to track best and latest models
+    best_models = []
+    latest_models = []
+
+    for epoch in range(start_epoch, num_epochs):
         print(f"Training Epoch [{epoch+1}/{num_epochs}]")
         model.train()  # Set the model to training mode
         total_loss = 0
@@ -32,7 +52,14 @@ def train_model(model, train_loader, val_loader, num_epochs=10, lr=0.001):
             correct += (predicted == labels).sum().item()
             total += labels.size(0)
 
-        print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {total_loss/len(train_loader):.4f}, Accuracy: {correct/total:.4f}")
+        avg_train_loss = total_loss / len(train_loader)
+        train_accuracy = correct / total
+        print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {avg_train_loss:.4f}, Accuracy: {train_accuracy:.4f}")
+
+        # Log training loss and accuracy to TensorBoard
+        if writer:
+            writer.add_scalar('Loss/train', avg_train_loss, epoch)
+            writer.add_scalar('Accuracy/train', train_accuracy, epoch)
 
         # Validation after each epoch
         model.eval()  # Set the model to evaluation mode
@@ -49,11 +76,71 @@ def train_model(model, train_loader, val_loader, num_epochs=10, lr=0.001):
                 val_correct += (predicted == labels).sum().item()
                 val_total += labels.size(0)
 
-        print(f"Validation Loss: {val_loss/len(val_loader):.4f}, Accuracy: {val_correct/val_total:.4f}")
+        avg_val_loss = val_loss / len(val_loader)
+        val_accuracy = val_correct / val_total
+        print(f"Validation Loss: {avg_val_loss:.4f}, Accuracy: {val_accuracy:.4f}")
+
+        # Log validation loss and accuracy to TensorBoard
+        if writer:
+            writer.add_scalar('Loss/val', avg_val_loss, epoch)
+            writer.add_scalar('Accuracy/val', val_accuracy, epoch)
+
+        # Save the best models based on validation loss
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            # Save the best model
+            best_model_path = os.path.join(checkpoint_dir, f"best_model.pth")
+            torch.save({
+                'epoch': epoch + 1,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'best_val_loss': best_val_loss,
+            }, best_model_path)
+            print(f"Best model saved with val loss {best_val_loss:.4f}")
+
+        # Track the latest models
+        latest_model_path = os.path.join(checkpoint_dir, f"latest_model_epoch_{epoch+1}.pth")
+        torch.save({
+            'epoch': epoch + 1,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+        }, latest_model_path)
+        print(f"Latest model saved for epoch {epoch+1}")
+
+        latest_models.append(latest_model_path)
+        if len(latest_models) > 3:
+            oldest_model = latest_models.pop(0)
+            os.remove(oldest_model)  # Remove the oldest model file
+
+        # Save the last 3 best models based on validation loss
+        if len(best_models) < 3:
+            best_models.append((avg_val_loss, epoch + 1))
+            # Sort models based on validation loss (ascending)
+            best_models = sorted(best_models, key=lambda x: x[0])
+        else:
+            # If we have 3 models, check if we need to add the current model
+            if avg_val_loss < best_models[-1][0]:
+                best_models[-1] = (avg_val_loss, epoch + 1)
+                best_models = sorted(best_models, key=lambda x: x[0])
+
+        # Save the top 3 best models
+        for val_loss, epoch_num in best_models:
+            model_checkpoint_path = os.path.join(checkpoint_dir, f"best_model_epoch_{epoch_num}.pth")
+            torch.save({
+                'epoch': epoch_num,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'best_val_loss': val_loss,
+            }, model_checkpoint_path)
+            print(f"Best model from epoch {epoch_num} with val loss {val_loss:.4f} saved")
 
 # Load Dataset and Train
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Create SummaryWriter instance
+    log_dir = "logs"
+    writer = SummaryWriter(log_dir=log_dir)
 
     file_paths_input = []
     labels_input = []
@@ -99,8 +186,12 @@ if __name__ == "__main__":
     train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
 
-    # Choose model
+    # Check for existing checkpoint to resume training
+    checkpoint_path = "checkpoints/latest_model_epoch_3.pth"  # Adjust this path based on the latest checkpoint
     model = CNNLSTMEmotionModel(num_classes=5).to(device)
 
     # Train model
-    train_model(model, train_loader, val_loader, num_epochs=10)
+    train_model(model, train_loader, val_loader, num_epochs=10, writer=writer, checkpoint_dir="checkpoints", checkpoint_path=checkpoint_path)
+
+    # Close the writer when done
+    writer.close()
