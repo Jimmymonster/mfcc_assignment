@@ -47,9 +47,11 @@ def train_model(model, train_loader, val_loader, num_epochs=10, lr=0.001, batch_
 
         for mfccs, labels in train_loader:
             mfccs, labels = mfccs.to(device), labels.to(device)
-            optimizer.zero_grad()
+            
             outputs = model(mfccs)
             loss = criterion(outputs, labels)
+
+            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
@@ -147,7 +149,7 @@ if __name__ == "__main__":
 
     # Set run_path dynamically (e.g., current timestamp or any other identifier)
     run_path = os.path.join("runs", "run_1")  # Modify "run_1" based on your system's timestamp or identifier
-    dataset_path = "dataset"  # Modify this path based on your dataset location
+    dataset_path = "dataset_tmp"  # Modify this path based on your dataset location
     batch_size = 32
 
     # Create the run_path directory if it doesn't exist
