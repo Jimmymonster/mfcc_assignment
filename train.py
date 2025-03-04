@@ -53,6 +53,8 @@ def train_model(model, train_loader, val_loader, num_epochs=10, lr=0.001, batch_
 
             optimizer.zero_grad()
             loss.backward()
+            # Gradient clipping
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
             total_loss += loss.item()
@@ -151,6 +153,7 @@ if __name__ == "__main__":
     run_path = os.path.join("runs", "run_1")  # Modify "run_1" based on your system's timestamp or identifier
     dataset_path = "dataset_tmp"  # Modify this path based on your dataset location
     batch_size = 32
+    lr=0.0001
 
     # Create the run_path directory if it doesn't exist
     os.makedirs(run_path, exist_ok=True)
@@ -206,9 +209,16 @@ if __name__ == "__main__":
 
     # Check for existing checkpoint to resume training
     model = CNNLSTMEmotionModel(num_classes=5).to(device)
+    def init_weights(m):
+        if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+            nn.init.xavier_uniform_(m.weight)
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
+
+    model.apply(init_weights)
 
     # Train model
-    train_model(model, train_loader, val_loader, num_epochs=10, batch_size=batch_size, writer=writer, run_path=run_path)
+    train_model(model, train_loader, val_loader, num_epochs=30, lr=lr , batch_size=batch_size, writer=writer, run_path=run_path)
 
     # Close the writer when done
     writer.close()
